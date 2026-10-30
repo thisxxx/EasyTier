@@ -30,32 +30,79 @@ defaults:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
           - TARGET: x86_64-unknown-linux-musl
+            OS: ubuntu-24.04
+            ARTIFACT_NAME: linux-x86_64
+          - TARGET: aarch64-unknown-linux-musl
+            OS: ubuntu-24.04-arm
+            ARTIFACT_NAME: linux-aarch64
+
+          - TARGET: riscv64gc-unknown-linux-musl
+            OS: ubuntu-24.04
+            ARTIFACT_NAME: linux-riscv64
+          - TARGET: loongarch64-unknown-linux-musl
+            OS: ubuntu-24.04
+            ARTIFACT_NAME: linux-loongarch64
+
+          - TARGET: armv7-unknown-linux-musleabihf
+            OS: ubuntu-24.04
+            ARTIFACT_NAME: linux-armv7hf
+          - TARGET: armv7-unknown-linux-musleabi
+            OS: ubuntu-24.04
+            ARTIFACT_NAME: linux-armv7
+          - TARGET: arm-unknown-linux-musleabihf
+            OS: ubuntu-24.04
+            ARTIFACT_NAME: linux-armhf
+          - TARGET: arm-unknown-linux-musleabi
+            OS: ubuntu-24.04
+            ARTIFACT_NAME: linux-arm
+
+          - TARGET: mips-unknown-linux-musl
+            OS: ubuntu-24.04
+            ARTIFACT_NAME: linux-mips
+          - TARGET: mipsel-unknown-linux-musl
+            OS: ubuntu-24.04
+            ARTIFACT_NAME: linux-mipsel
+
+          - TARGET: x86_64-unknown-freebsd
+            OS: ubuntu-24.04
+            ARTIFACT_NAME: freebsd-13.2-x86_64
+            BSD_VERSION: 13.2
+
+          - TARGET: x86_64-apple-darwin
+            OS: macos-latest
+            ARTIFACT_NAME: macos-x86_64
+          - TARGET: aarch64-apple-darwin
+            OS: macos-latest
+            ARTIFACT_NAME: macos-aarch64
+
+          - TARGET: x86_64-pc-windows-msvc
+            OS: windows-latest
+            ARTIFACT_NAME: windows-x86_64
+          - TARGET: i686-pc-windows-msvc
+            OS: windows-latest
+            ARTIFACT_NAME: windows-i686
+          - TARGET: aarch64-pc-windows-msvc
+            OS: windows-11-arm
+            ARTIFACT_NAME: windows-arm64
+
+    runs-on: ${{ matrix.OS }}
+    env:
+      TARGET: ${{ matrix.TARGET }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -qqy build-essential musl-tools
-          which musl-gcc
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+      - name: Prepare build environment
+        uses: ./.github/actions/prepare-build
         with:
-          toolchain: "1.95"
-          targets: ${{ matrix.TARGET }}
-
-      - name: Setup protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "35.1"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          target: ${{ matrix.TARGET }}
+          gui: false
+          pnpm: false
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -63,45 +110,84 @@ jobs:
           cache-targets: true
 
       - name: Build easytier-lite
+        env:
+          RUSTC_BOOTSTRAP: ${{ contains(matrix.TARGET, 'mips') && '1' || '' }}
         run: |
-          cargo build --release --target ${{ matrix.TARGET }} -p easytier-lite
-          ls -l target/${{ matrix.TARGET }}/release/easytier-lite
-          du -h target/${{ matrix.TARGET }}/release/easytier-lite
+          if [[ "$TARGET" == *windows* ]]; then
+            SUFFIX=.exe
+          else
+            SUFFIX=""
+          fi
 
-      - name: Compress
+          if [[ "$TARGET" =~ (x86_64-unknown-linux-musl|aarch64-unknown-linux-musl|windows|darwin) ]]; then
+            BUILD=build
+          else
+            BUILD=zigbuild
+          fi
+
+          # mips targets are not supported by zig, upstream builds them with
+          # build-std against the musl-cross toolchain installed above.
+          if [[ "$TARGET" =~ ^mips ]]; then
+            cargo build -r --target "$TARGET" -Z build-std=std,panic_abort \
+              --package easytier-lite
+          else
+            cargo "$BUILD" --release --target "$TARGET" --package easytier-lite
+          fi
+
+          BIN="target/$TARGET/release/easytier-lite$SUFFIX"
+          ls -l "$BIN"
+          du -h "$BIN"
+
+      - name: Pin the binary name
         run: |
-          mkdir -p artifacts
-          BIN=target/${{ matrix.TARGET }}/release/easytier-lite
-          NAME=easytier-lite-${{ matrix.TARGET }}
-          strip "$BIN"
-          echo "== stripped =="
-          du -h "$BIN"
-          cp "$BIN" "artifacts/$NAME.plain"
+          if [[ "$TARGET" == *windows* ]]; then
+            SUFFIX=.exe
+          else
+            SUFFIX=""
+          fi
+          SRC="target/$TARGET/release/easytier-lite$SUFFIX"
+          mkdir -p dist
+          cp "$SRC" "dist/easytier-lite-${{ matrix.ARTIFACT_NAME }}$SUFFIX"
 
-          # Same treatment as the official release: UPX the final binary so the
-          # image on the router is as small as possible.
-          UPX_VERSION=4.2.4
-          curl -sL "https://github.com/upx/upx/releases/download/v${UPX_VERSION}/upx-${UPX_VERSION}-amd64_linux.tar.xz" | tar xJf -
-          ./upx-${UPX_VERSION}-amd64_linux/upx --lzma --best "$BIN"
-          echo "== after upx =="
-          du -h "$BIN"
-
-          cp "$BIN" "artifacts/$NAME"
-          cd artifacts
-          zip -9 "$NAME.zip" "$NAME.plain" "$NAME"
+          # Shrink Linux images: strip always, then UPX (same as the official
+          # release). Skipped where strip/upx do not understand the target.
+          if [[ "$TARGET" == *linux* && ! "$TARGET" =~ ^mips ]]; then
+            strip "dist/easytier-lite-${{ matrix.ARTIFACT_NAME }}$SUFFIX" || true
+            UPX_VERSION=4.2.4
+            curl -sL "https://github.com/upx/upx/releases/download/v${UPX_VERSION}/upx-${UPX_VERSION}-amd64_linux.tar.xz" | tar xJf -
+            ./upx-${UPX_VERSION}-amd64_linux/upx --lzma --best \
+              "dist/easytier-lite-${{ matrix.ARTIFACT_NAME }}$SUFFIX" || true
+          fi
+          du -h dist/*
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: easytier-lite-${{ matrix.TARGET }}
-          path: |
-            artifacts/easytier-lite-${{ matrix.TARGET }}
-            artifacts/easytier-lite-${{ matrix.TARGET }}.plain
-            artifacts/easytier-lite-${{ matrix.TARGET }}.zip
+          name: easytier-lite-${{ matrix.ARTIFACT_NAME }}
+          path: dist/*
           if-no-files-found: error
 
-      # Every build refreshes one rolling release, so the binary is always one
-      # click away instead of buried in an expiring artifact.
+  publish:
+    needs: build
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download every built target
+        uses: actions/download-artifact@v4
+        with:
+          pattern: easytier-lite-*
+          path: out
+
+      - name: Zip per platform
+        run: |
+          mkdir -p assets
+          cd out
+          for d in */; do
+            name="${d%/}"
+            (cd "$name" && zip -9 -r "../../assets/$name.zip" .)
+          done
+          ls -l ../assets
+
       - name: Publish rolling release
         uses: softprops/action-gh-release@v2
         with:
@@ -109,20 +195,15 @@ jobs:
           name: easytier-lite (latest build)
           prerelease: true
           body: |
-            Rolling build of `easytier-lite` from `${{ github.ref_name }}`.
+            Rolling multi-platform build of `easytier-lite` from `${{ github.ref_name }}`
+            (commit `${{ github.sha }}`).
 
-            * commit: `${{ github.sha }}`
-            * built: ${{ github.event.repository.updated_at }}
+            `easytier-lite` is a command-line-only EasyTier node for small routers:
+            it exports a LAN subnet to the virtual network (`--proxy-networks`) and
+            gates foreign networks with `--private-group`. It carries no config file,
+            no config server and no clap — ten flags are the whole surface.
 
-            Two files are attached for each target:
-
-            | file | note |
-            |---|---|
-            | `easytier-lite-<target>` | UPX (lzma) packed, smallest — the one to copy to the router |
-            | `easytier-lite-<target>.plain` | plain stripped binary, no packer |
-            | `easytier-lite-<target>.zip` | both of the above |
-          files: |
-            artifacts/easytier-lite-${{ matrix.TARGET }}
-            artifacts/easytier-lite-${{ matrix.TARGET }}.plain
-            artifacts/easytier-lite-${{ matrix.TARGET }}.zip
+            Linux binaries are static musl, UPX packed. Windows/macOS/FreeBSD builds
+            are plain release builds.
+          files: assets/*.zip
           fail_on_unmatched_files: true
