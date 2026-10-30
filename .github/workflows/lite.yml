@@ -49,7 +49,7 @@ jobs:
 
       - name: Build easytier-lite
         run: |
-          cargo build --release --target ${{ matrix.TARGET }} --bin easytier-lite
+          cargo build --release --target ${{ matrix.TARGET }} -p easytier-lite
           ls -l target/${{ matrix.TARGET }}/release/easytier-lite
           du -h target/${{ matrix.TARGET }}/release/easytier-lite
 
