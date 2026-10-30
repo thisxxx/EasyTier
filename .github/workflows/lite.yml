@@ -109,6 +109,19 @@ jobs:
           shared-key: lite-${{ matrix.TARGET }}
           cache-targets: true
 
+      # Every target that the host cannot build natively goes through zig;
+      # upstream pins both of these for the same reason.
+      - uses: mlugg/setup-zig@v2
+        if: ${{ contains(matrix.OS, 'ubuntu') }}
+        with:
+          version: 0.16.0
+          use-cache: true
+
+      - uses: taiki-e/install-action@v2
+        if: ${{ contains(matrix.OS, 'ubuntu') }}
+        with:
+          tool: cargo-zigbuild@0.23.2
+
       - name: Build easytier-lite
         env:
           RUSTC_BOOTSTRAP: ${{ contains(matrix.TARGET, 'mips') && '1' || '' }}
