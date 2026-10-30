@@ -1,0 +1,33 @@
+[package]
+name = "easytier-lite"
+description = "Minimal EasyTier relay / subnet-gateway node configured entirely on the command line."
+version = "2.7.0"
+edition.workspace = true
+rust-version.workspace = true
+license-file = "../../LICENSE"
+
+[[bin]]
+name = "easytier-lite"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+cidr.workspace = true
+url.workspace = true
+easytier = { workspace = true, features = [
+    "aes-gcm",
+    "faketcp",
+    "kcp",
+    "logging",
+    "management-rpc",
+    "proxy-cidr-monitor",
+    "quic",
+    "smoltcp",
+    "websocket",
+] }
+easytier-core.workspace = true
+tokio = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+    "signal",
+] }

@@ -65,6 +65,18 @@ pub fn init_console() -> anyhow::Result<()> {
     ))
 }
 
+/// Installs the console logger at `level` instead of the built-in `info`.
+///
+/// Used by the minimal node, which takes its level from the command line and
+/// writes no log file: the service manager already captures stdout.
+pub fn init_console_with_level(level: &str) -> anyhow::Result<()> {
+    let level = parse_level(level).context("invalid console log level")?;
+    install(Logger::new(
+        TargetFilter::console(Some(level))?,
+        FileSink::disabled(),
+    ))
+}
+
 pub fn set_file_level(level: &str) -> anyhow::Result<()> {
     let level = parse_level(level).context("invalid file log level")?;
     LOGGER

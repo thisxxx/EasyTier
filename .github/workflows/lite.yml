@@ -1,0 +1,68 @@
+name: EasyTier Lite
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feature/lite"]
+    paths:
+      - "easytier-contrib/easytier-lite/**"
+      - "easytier/**"
+      - "easytier-core/**"
+      - "easytier-proto/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/lite.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - TARGET: x86_64-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.95"
+          targets: ${{ matrix.TARGET }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: lite-${{ matrix.TARGET }}
+          cache-targets: true
+
+      - name: Build easytier-lite
+        run: |
+          cargo build --release --target ${{ matrix.TARGET }} --bin easytier-lite
+          ls -l target/${{ matrix.TARGET }}/release/easytier-lite
+          du -h target/${{ matrix.TARGET }}/release/easytier-lite
+
+      - name: Compress
+        run: |
+          mkdir -p artifacts
+          strip target/${{ matrix.TARGET }}/release/easytier-lite || true
+          cp target/${{ matrix.TARGET }}/release/easytier-lite artifacts/
+          cd artifacts && zip -9 easytier-lite-${{ matrix.TARGET }}.zip easytier-lite
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: easytier-lite-${{ matrix.TARGET }}
+          path: artifacts/easytier-lite-${{ matrix.TARGET }}.zip
+          if-no-files-found: error
