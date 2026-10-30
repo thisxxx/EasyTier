@@ -21,6 +21,9 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: write
+
 defaults:
   run:
     shell: bash
@@ -69,9 +72,11 @@ jobs:
         run: |
           mkdir -p artifacts
           BIN=target/${{ matrix.TARGET }}/release/easytier-lite
+          NAME=easytier-lite-${{ matrix.TARGET }}
           strip "$BIN"
           echo "== stripped =="
           du -h "$BIN"
+          cp "$BIN" "artifacts/$NAME.plain"
 
           # Same treatment as the official release: UPX the final binary so the
           # image on the router is as small as possible.
@@ -81,12 +86,43 @@ jobs:
           echo "== after upx =="
           du -h "$BIN"
 
-          cp "$BIN" artifacts/
-          cd artifacts && zip -9 easytier-lite-${{ matrix.TARGET }}.zip easytier-lite
+          cp "$BIN" "artifacts/$NAME"
+          cd artifacts
+          zip -9 "$NAME.zip" "$NAME.plain" "$NAME"
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: easytier-lite-${{ matrix.TARGET }}
-          path: artifacts/easytier-lite-${{ matrix.TARGET }}.zip
+          path: |
+            artifacts/easytier-lite-${{ matrix.TARGET }}
+            artifacts/easytier-lite-${{ matrix.TARGET }}.plain
+            artifacts/easytier-lite-${{ matrix.TARGET }}.zip
           if-no-files-found: error
+
+      # Every build refreshes one rolling release, so the binary is always one
+      # click away instead of buried in an expiring artifact.
+      - name: Publish rolling release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: lite-latest
+          name: easytier-lite (latest build)
+          prerelease: true
+          body: |
+            Rolling build of `easytier-lite` from `${{ github.ref_name }}`.
+
+            * commit: `${{ github.sha }}`
+            * built: ${{ github.event.repository.updated_at }}
+
+            Two files are attached for each target:
+
+            | file | note |
+            |---|---|
+            | `easytier-lite-<target>` | UPX (lzma) packed, smallest — the one to copy to the router |
+            | `easytier-lite-<target>.plain` | plain stripped binary, no packer |
+            | `easytier-lite-<target>.zip` | both of the above |
+          files: |
+            artifacts/easytier-lite-${{ matrix.TARGET }}
+            artifacts/easytier-lite-${{ matrix.TARGET }}.plain
+            artifacts/easytier-lite-${{ matrix.TARGET }}.zip
+          fail_on_unmatched_files: true
