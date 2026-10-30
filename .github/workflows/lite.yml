@@ -68,8 +68,20 @@ jobs:
       - name: Compress
         run: |
           mkdir -p artifacts
-          strip target/${{ matrix.TARGET }}/release/easytier-lite || true
-          cp target/${{ matrix.TARGET }}/release/easytier-lite artifacts/
+          BIN=target/${{ matrix.TARGET }}/release/easytier-lite
+          strip "$BIN"
+          echo "== stripped =="
+          du -h "$BIN"
+
+          # Same treatment as the official release: UPX the final binary so the
+          # image on the router is as small as possible.
+          UPX_VERSION=4.2.4
+          curl -sL "https://github.com/upx/upx/releases/download/v${UPX_VERSION}/upx-${UPX_VERSION}-amd64_linux.tar.xz" | tar xJf -
+          ./upx-${UPX_VERSION}-amd64_linux/upx --lzma --best "$BIN"
+          echo "== after upx =="
+          du -h "$BIN"
+
+          cp "$BIN" artifacts/
           cd artifacts && zip -9 easytier-lite-${{ matrix.TARGET }}.zip easytier-lite
 
       - name: Upload
