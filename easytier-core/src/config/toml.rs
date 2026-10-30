@@ -93,6 +93,10 @@ pub trait ConfigLoader: Send + Sync {
         Vec::new()
     }
 
+    /// Replaces the allow list. Implementations that cannot store it keep the
+    /// default, which is the empty list and therefore the legacy behavior.
+    fn set_private_groups(&self, _groups: Vec<PrivateGroupConfig>) {}
+
     fn get_listener_uris(&self) -> Vec<url::Url>;
 
     fn get_peers(&self) -> Vec<PeerConfig>;
@@ -868,6 +872,11 @@ impl ConfigLoader for TomlConfig {
             .private_group
             .clone()
             .unwrap_or_default()
+    }
+
+    fn set_private_groups(&self, groups: Vec<PrivateGroupConfig>) {
+        let mut config = self.config.lock().unwrap();
+        config.private_group = if groups.is_empty() { None } else { Some(groups) };
     }
 
     fn get_listener_uris(&self) -> Vec<url::Url> {
