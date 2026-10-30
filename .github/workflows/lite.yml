@@ -36,11 +36,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -qqy build-essential musl-tools
+          which musl-gcc
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.95"
           targets: ${{ matrix.TARGET }}
+
+      - name: Setup protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "35.1"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: Swatinem/rust-cache@v2
         with:
