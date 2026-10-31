@@ -1,0 +1,81 @@
+name: Measure lite sizes
+
+# 在 2.7 上按 feature 逐级裁剪，测 easytier-lite 的实际体积。
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feature/lite"]
+    paths:
+      - ".github/workflows/measure-lite.yml"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  measure:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - NAME: lite-current
+            FEATURES: ""
+          - NAME: lite-min
+            FEATURES: "aes-gcm,smoltcp,logging,management-rpc,proxy-cidr-monitor"
+          - NAME: lite-min-kcp
+            FEATURES: "aes-gcm,smoltcp,logging,management-rpc,proxy-cidr-monitor,kcp,faketcp"
+          - NAME: lite-min-tun
+            FEATURES: "aes-gcm,smoltcp,tun,logging,management-rpc,proxy-cidr-monitor,linux-netlink"
+
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Prepare build environment
+        uses: ./.github/actions/prepare-build
+        with:
+          target: x86_64-unknown-linux-musl
+          gui: false
+          pnpm: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply feature set
+        env:
+          FEATURES: ${{ matrix.FEATURES }}
+        run: |
+          if [[ -z "$FEATURES" ]]; then
+            echo "keeping default lite feature set"
+            exit 0
+          fi
+          python3 -c 'import re,sys
+          feats=sys.argv[1].split(",")
+          p="easytier-contrib/easytier-lite/Cargo.toml"
+          s=open(p).read()
+          body="".join("    \"%s\",\n" % f for f in feats)
+          s2=re.sub(r"(easytier = \{ workspace = true, features = \[)[^\]]*(\])", lambda m: m.group(1)+"\n"+body+m.group(2), s, flags=re.S)
+          open(p,"w").write(s2)
+          print(s2)
+          ' "$FEATURES"
+
+      - name: Build
+        run: |
+          set -o pipefail
+          cargo build --release --target x86_64-unknown-linux-musl --package easytier-lite 2>&1 | tail -30
+
+      - name: Report size
+        run: |
+          BIN="target/x86_64-unknown-linux-musl/release/easytier-lite"
+          cp "$BIN" /tmp/raw
+          strip "$BIN"
+          echo "======== ${{ matrix.NAME }} (features='${{ matrix.FEATURES }}') ========"
+          echo "raw   : $(stat -c %s /tmp/raw) bytes"
+          echo "strip : $(stat -c %s "$BIN") bytes"
+          curl -sL "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-amd64_linux.tar.xz" | tar xJf -
+          ./upx-4.2.4-amd64_linux/upx --lzma --best -q -o /tmp/upxed "$BIN" || true
+          echo "upx   : $(stat -c %s /tmp/upxed 2>/dev/null || echo n/a) bytes"
+
+      - name: Show which features were actually used
+        if: always()
+        run: |
+          cargo tree --package easytier-lite -e features --depth 1 2>/dev/null | head -20 || true
