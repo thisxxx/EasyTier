@@ -45,6 +45,8 @@ Required:
 
 Options:
   --network-secret <SECRET>    network secret; omit for a secret-less network
+  --hostname <NAME>            name shown to other nodes; defaults to the
+                               system hostname (32 chars max)
   --ipv4 <CIDR>                static virtual address, e.g. 10.126.126.1/24
   -d, --dhcp                   let the network assign a virtual address instead
   -p, --peers <URL,...>        peers to connect to, e.g. tcp://1.2.3.4:11010
@@ -75,6 +77,7 @@ enum Command {
 struct Options {
     network_name: Option<String>,
     network_secret: Option<String>,
+    hostname: Option<String>,
     ipv4: Option<String>,
     dhcp: bool,
     peers: Vec<String>,
@@ -136,6 +139,9 @@ fn parse_args(mut args: impl Iterator<Item = OsString>) -> anyhow::Result<Comman
             }
             "--network-secret" => {
                 options.network_secret = Some(take_value(&flag, inline, &mut args)?)
+            }
+            "--hostname" => {
+                options.hostname = Some(parse_hostname(&take_value(&flag, inline, &mut args)?)?)
             }
             "--ipv4" => options.ipv4 = Some(take_value(&flag, inline, &mut args)?),
             "-d" | "--dhcp" => options.dhcp = true,
@@ -219,6 +225,18 @@ fn parse_private_group(raw: &str) -> PrivateGroupConfig {
     }
 }
 
+/// Trims and validates `--hostname`. The name other nodes display is what the
+/// global context ends up holding, so reject values that cannot be shown.
+fn parse_hostname(raw: &str) -> anyhow::Result<String> {
+    let name = raw.trim();
+    anyhow::ensure!(!name.is_empty(), "--hostname must not be empty");
+    anyhow::ensure!(
+        !name.chars().any(char::is_control),
+        "--hostname must not contain control characters"
+    );
+    Ok(name.to_owned())
+}
+
 fn build_config(options: &Options) -> anyhow::Result<TomlConfigLoader> {
     let network_name = options
         .network_name
@@ -230,6 +248,10 @@ fn build_config(options: &Options) -> anyhow::Result<TomlConfigLoader> {
         network_name,
         options.network_secret.clone().unwrap_or_default(),
     ));
+
+    if let Some(hostname) = options.hostname.as_deref() {
+        config.set_hostname(Some(hostname.to_owned()));
+    }
 
     if let Some(ipv4) = options.ipv4.as_deref() {
         let ipv4 =
@@ -345,6 +367,8 @@ mod tests {
             "--network-name",
             "home",
             "--network-secret=s3cret",
+            "--hostname",
+            "k2p",
             "--ipv4",
             "10.126.126.1/24",
             "-p",
@@ -362,6 +386,7 @@ mod tests {
 
         assert_eq!(options.network_name.as_deref(), Some("home"));
         assert_eq!(options.network_secret.as_deref(), Some("s3cret"));
+        assert_eq!(options.hostname.as_deref(), Some("k2p"));
         assert_eq!(options.ipv4.as_deref(), Some("10.126.126.1/24"));
         assert_eq!(options.peers, ["tcp://1.2.3.4:11010"]);
         assert_eq!(options.listeners.len(), 2);
@@ -378,6 +403,27 @@ mod tests {
     #[test]
     fn rejects_unknown_arguments() {
         assert!(parse(["--network-name", "home", "--config-file", "x.toml"]).is_err());
+    }
+
+    #[test]
+    fn parses_hostname() {
+        assert_eq!(parse_hostname("  k2p  ").unwrap(), "k2p");
+        assert!(parse_hostname("   ").is_err());
+        assert!(parse_hostname("a\tb").is_err());
+    }
+
+    #[test]
+    fn hostname_reaches_the_config() {
+        let options = parse(["--network-name", "home", "--hostname", "k2p"]).unwrap();
+        let config = build_config(&options).unwrap();
+        assert_eq!(config.get_hostname(), "k2p");
+    }
+
+    #[test]
+    fn missing_hostname_falls_back_to_the_system_one() {
+        let options = parse(["--network-name", "home"]).unwrap();
+        let config = build_config(&options).unwrap();
+        assert!(config.get_hostname().is_empty());
     }
 
     #[test]
