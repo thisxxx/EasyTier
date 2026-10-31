@@ -20,6 +20,9 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Bump this when the binary actually changes behaviour; the release tag
+  # also carries the build date and commit so every build keeps its own entry.
+  LITE_VERSION: "0.1.0"
 
 permissions:
   contents: write
@@ -227,11 +230,18 @@ jobs:
           done
           ls -l ../assets
 
-      - name: Publish rolling release
+      - name: Compute the release tag
+        id: meta
+        run: |
+          DATE=$(date -u +%Y%m%d)
+          SHA7="${GITHUB_SHA::7}"
+          echo "tag=lite-v${{ env.LITE_VERSION }}-${DATE}-${SHA7}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish versioned release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: lite-latest
-          name: easytier-lite (latest build)
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: easytier-lite v${{ env.LITE_VERSION }} (${{ steps.meta.outputs.tag }})
           prerelease: true
           body: |
             Rolling multi-platform build of `easytier-lite` from `${{ github.ref_name }}`
