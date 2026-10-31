@@ -53,6 +53,10 @@ jobs:
           git clone --depth 1 --branch "${{ matrix.REF }}" \
             https://github.com/EasyTier/EasyTier.git src
 
+      - name: Add musl target
+        working-directory: src
+        run: rustup target add x86_64-unknown-linux-musl
+
       - name: Build (${{ matrix.FEATURES }})
         working-directory: src
         run: |
