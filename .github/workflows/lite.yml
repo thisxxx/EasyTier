@@ -22,7 +22,7 @@ env:
   CARGO_TERM_COLOR: always
   # Bump this when the binary actually changes behaviour; the release tag
   # also carries the build date and commit so every build keeps its own entry.
-  LITE_VERSION: "0.1.0"
+  LITE_VERSION: "0.2.0"
 
 permissions:
   contents: write
@@ -144,13 +144,13 @@ jobs:
           # mips targets are not supported by zig, upstream builds them with
           # build-std against the musl-cross toolchain installed above.
           if [[ "$TARGET" =~ ^mips ]]; then
-            cargo build -r --target "$TARGET" -Z build-std=std,panic_abort \
-              --package easytier-lite
+            cargo build --profile mini --target "$TARGET" \
+              -Z build-std=std,panic_abort --package easytier-lite
           else
-            cargo "$BUILD" --release --target "$TARGET" --package easytier-lite
+            cargo "$BUILD" --profile mini --target "$TARGET" --package easytier-lite
           fi
 
-          BIN="target/$TARGET/release/easytier-lite$SUFFIX"
+          BIN="target/$TARGET/mini/easytier-lite$SUFFIX"
           ls -l "$BIN"
           du -h "$BIN"
 
@@ -161,7 +161,7 @@ jobs:
           else
             SUFFIX=""
           fi
-          SRC="target/$TARGET/release/easytier-lite$SUFFIX"
+          SRC="target/$TARGET/mini/easytier-lite$SUFFIX"
           mkdir -p dist
           cp "$SRC" "dist/easytier-lite-${{ matrix.ARTIFACT_NAME }}$SUFFIX"
 
