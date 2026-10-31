@@ -162,15 +162,41 @@ jobs:
           mkdir -p dist
           cp "$SRC" "dist/easytier-lite-${{ matrix.ARTIFACT_NAME }}$SUFFIX"
 
-          # Shrink Linux images: strip always, then UPX (same as the official
-          # release). Skipped where strip/upx do not understand the target.
-          if [[ "$TARGET" == *linux* && ! "$TARGET" =~ ^mips ]]; then
-            strip "dist/easytier-lite-${{ matrix.ARTIFACT_NAME }}$SUFFIX" || true
+      # Strip where a host toolchain provides one, then UPX-pack every target:
+      # UPX understands ELF (linux/freebsd/mips), PE (windows) and Mach-O (macos).
+      # A format it refuses keeps the original binary and only emits a warning,
+      # so one exotic target can never fail the whole matrix.
+      - name: Strip and UPX
+        run: |
+          if [[ "$TARGET" == *windows* ]]; then
+            SUFFIX=.exe
+          else
+            SUFFIX=""
+          fi
+          BIN="dist/easytier-lite-${{ matrix.ARTIFACT_NAME }}$SUFFIX"
+
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            if [[ "$TARGET" == *linux* && ! "$TARGET" =~ ^mips ]]; then
+              strip "$BIN" || true
+            fi
             UPX_VERSION=4.2.4
             curl -sL "https://github.com/upx/upx/releases/download/v${UPX_VERSION}/upx-${UPX_VERSION}-amd64_linux.tar.xz" | tar xJf -
-            ./upx-${UPX_VERSION}-amd64_linux/upx --lzma --best \
-              "dist/easytier-lite-${{ matrix.ARTIFACT_NAME }}$SUFFIX" || true
+            UPX=./upx-${UPX_VERSION}-amd64_linux/upx
+          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+            curl -sLo upx.zip "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-win64.zip"
+            unzip -oq upx.zip
+            UPX=./upx-4.2.4-win64/upx.exe
+          else
+            brew install upx
+            UPX=upx
           fi
+
+          echo "== before =="
+          ls -l "$BIN"
+          du -h "$BIN"
+          "$UPX" --lzma --best "$BIN" || echo "::warning::upx skipped for $TARGET"
+          echo "== after =="
+          ls -l "$BIN"
           du -h dist/*
 
       - name: Upload
@@ -216,7 +242,8 @@ jobs:
             gates foreign networks with `--private-group`. It carries no config file,
             no config server and no clap — ten flags are the whole surface.
 
-            Linux binaries are static musl, UPX packed. Windows/macOS/FreeBSD builds
-            are plain release builds.
+            Linux binaries are static musl, UPX packed. Every target is UPX
+            (lzma) packed when the format is supported; binaries UPX cannot
+            handle ship as plain release builds.
           files: assets/*.zip
           fail_on_unmatched_files: true
