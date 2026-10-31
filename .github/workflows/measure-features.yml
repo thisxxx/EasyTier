@@ -4,6 +4,10 @@ name: Measure feature sizes
 # 结果只打印到日志，不产出 artifact。
 on:
   workflow_dispatch:
+  push:
+    branches: ["feature/lite"]
+    paths:
+      - ".github/workflows/measure-features.yml"
 
 defaults:
   run:
