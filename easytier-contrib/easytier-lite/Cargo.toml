@@ -21,9 +21,7 @@ easytier = { workspace = true, features = [
     "logging",
     "management-rpc",
     "proxy-cidr-monitor",
-    "quic",
     "smoltcp",
-    "websocket",
 ] }
 easytier-core.workspace = true
 tokio = { workspace = true, features = [

@@ -118,3 +118,12 @@ strip = true
 inherits = "release"
 opt-level = "z"
 strip = "symbols"
+
+# Two hot spots keep full optimisation: AES-GCM is the packet cipher and
+# smoltcp is the userspace stack every proxied byte crosses. On the MIPS
+# router this costs ~6 KB after UPX, well worth the throughput.
+[profile.mini.package."aes-gcm"]
+opt-level = 3
+
+[profile.mini.package."smoltcp"]
+opt-level = 3
