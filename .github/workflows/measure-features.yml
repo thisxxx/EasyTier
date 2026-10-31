@@ -34,9 +34,9 @@ jobs:
             REF: v2.3.2
             FEATURES: "aes-gcm,smoltcp,tun"
           # 2.0.2 —— 同样两组，用于对比同 feature 下的代际差
-          - NAME: "202-smoltcp"
+          - NAME: "202-tun"
             REF: v2.0.2
-            FEATURES: "aes-gcm,smoltcp"
+            FEATURES: "aes-gcm,tun"
           - NAME: "202-both"
             REF: v2.0.2
             FEATURES: "aes-gcm,smoltcp,tun"
@@ -62,8 +62,12 @@ jobs:
         run: |
           set -o pipefail
           cargo build --release --target x86_64-unknown-linux-musl \
-            --no-default-features --features "${{ matrix.FEATURES }}" \
-            --bin easytier-core 2>&1 | tail -40
+            --package easytier --bin easytier-core \
+            --no-default-features --features "${{ matrix.FEATURES }}" 2>&1 | tail -30
+
+      - name: Show resolved features
+        working-directory: src
+        run: cargo tree --package easytier -e features --depth 1 2>/dev/null | head -30 || true
 
       - name: Report size
         working-directory: src
