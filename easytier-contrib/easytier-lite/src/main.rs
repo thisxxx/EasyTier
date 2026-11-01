@@ -140,9 +140,7 @@ fn parse_args(mut args: impl Iterator<Item = OsString>) -> anyhow::Result<Comman
             "--network-secret" => {
                 options.network_secret = Some(take_value(&flag, inline, &mut args)?)
             }
-            "--hostname" => {
-                options.hostname = Some(parse_hostname(&take_value(&flag, inline, &mut args)?)?)
-            }
+            "--hostname" => options.hostname = Some(take_value(&flag, inline, &mut args)?),
             "--ipv4" => options.ipv4 = Some(take_value(&flag, inline, &mut args)?),
             "-d" | "--dhcp" => options.dhcp = true,
             "-p" | "--peers" => push_list(&mut options.peers, take_value(&flag, inline, &mut args)?),
@@ -225,18 +223,6 @@ fn parse_private_group(raw: &str) -> PrivateGroupConfig {
     }
 }
 
-/// Trims and validates `--hostname`. The name other nodes display is what the
-/// global context ends up holding, so reject values that cannot be shown.
-fn parse_hostname(raw: &str) -> anyhow::Result<String> {
-    let name = raw.trim();
-    anyhow::ensure!(!name.is_empty(), "--hostname must not be empty");
-    anyhow::ensure!(
-        !name.chars().any(char::is_control),
-        "--hostname must not contain control characters"
-    );
-    Ok(name.to_owned())
-}
-
 fn build_config(options: &Options) -> anyhow::Result<TomlConfigLoader> {
     let network_name = options
         .network_name
@@ -249,6 +235,9 @@ fn build_config(options: &Options) -> anyhow::Result<TomlConfigLoader> {
         options.network_secret.clone().unwrap_or_default(),
     ));
 
+    // Same contract as `easytier-core --hostname`: the value goes in verbatim and
+    // the core normalises it on read (strips control chars, keeps 32 chars, and
+    // falls back to the system hostname when nothing usable is left).
     if let Some(hostname) = options.hostname.as_deref() {
         config.set_hostname(Some(hostname.to_owned()));
     }
@@ -406,10 +395,17 @@ mod tests {
     }
 
     #[test]
-    fn parses_hostname() {
-        assert_eq!(parse_hostname("  k2p  ").unwrap(), "k2p");
-        assert!(parse_hostname("   ").is_err());
-        assert!(parse_hostname("a\tb").is_err());
+    fn hostname_is_normalised_by_the_core() {
+        // The lite CLI passes the value through untouched; the core trims it to
+        // 32 chars and drops control characters, exactly like upstream core does.
+        let options = parse(["--network-name", "home", "--hostname", "a\tb"]).unwrap();
+        let config = build_config(&options).unwrap();
+        assert_eq!(config.get_hostname(), "ab");
+
+        let long = "x".repeat(40);
+        let options = parse(["--network-name", "home", "--hostname", long.as_str()]).unwrap();
+        let config = build_config(&options).unwrap();
+        assert_eq!(config.get_hostname().len(), 32);
     }
 
     #[test]
