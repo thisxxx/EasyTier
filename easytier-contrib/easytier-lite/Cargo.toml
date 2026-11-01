@@ -16,7 +16,6 @@ cidr.workspace = true
 url.workspace = true
 easytier = { workspace = true, features = [
     "aes-gcm",
-    "faketcp",
     "kcp",
     "logging",
     "management-rpc",
