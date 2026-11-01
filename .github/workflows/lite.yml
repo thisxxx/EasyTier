@@ -22,7 +22,7 @@ env:
   CARGO_TERM_COLOR: always
   # Bump this when the binary actually changes behaviour; the release tag
   # also carries the build date and commit so every build keeps its own entry.
-  LITE_VERSION: "0.2.4"
+  LITE_VERSION: "0.2.5"
 
 permissions:
   contents: write
