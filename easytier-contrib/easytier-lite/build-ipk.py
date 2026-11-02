@@ -27,6 +27,7 @@ EXTRA_FILES = {
     "etc/config/easytier-lite": 0o644,
     "etc/init.d/easytier-lite": 0o755,
     "usr/lib/lua/luci/controller/easytier_lite.lua": 0o644,
+    "usr/lib/lua/luci/easytier_lite/i18n.lua": 0o644,
     "usr/lib/lua/luci/model/cbi/easytier_lite.lua": 0o644,
 }
 CONTROL_FILES = {
