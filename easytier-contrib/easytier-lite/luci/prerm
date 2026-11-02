@@ -1,0 +1,3 @@
+#!/bin/sh
+[ -z "${IPKG_INSTROOT}" ] && [ -x "/etc/init.d/easytier-lite" ] && /etc/init.d/easytier-lite stop >/dev/null 2>&1
+exit 0

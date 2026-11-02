@@ -1,0 +1,4 @@
+#!/bin/sh
+[ "${IPKG_NO_SCRIPT}" = "1" ] && exit 0
+[ -x "/etc/init.d/easytier-lite" ] && /etc/init.d/easytier-lite enable >/dev/null 2>&1
+exit 0

@@ -1,0 +1,4 @@
+# These end up verbatim inside the .ipk / on a router running busybox.
+# A CRLF shebang line fails with "\r: not found", so force LF in the repo.
+build-ipk.py text eol=lf
+luci/** text eol=lf

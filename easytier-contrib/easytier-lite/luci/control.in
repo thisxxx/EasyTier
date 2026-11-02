@@ -1,0 +1,11 @@
+Package: luci-app-easytier-lite
+Version: @VERSION@-1
+Depends: libc, luci-base, luci-compat
+Architecture: @ARCH@
+Installed-Size: @SIZE@
+Maintainer: thisxxx
+Section: luci
+Priority: optional
+Description: LuCI page for easytier-lite, a minimal EasyTier node for home routers.
+ Bundles the easytier-lite binary (DNS/STUN resolution and TCP hole punching
+ enabled) with a procd service and a UCI-backed LuCI configuration page.
