@@ -209,8 +209,59 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  publish:
+  # Wrap the router-relevant binaries into OpenWrt packages. The arch names are
+  # the ones opkg compares against; a mismatch only costs a
+  # "package architecture does not match" warning, but keeping them right means
+  # plain `opkg install` works on stock firmware.
+  ipk:
     needs: build
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ARTIFACT: linux-mipsel
+            ARCH: mipsel_24kc
+          - ARTIFACT: linux-mips
+            ARCH: mips_24kc
+          - ARTIFACT: linux-armhf
+            ARCH: arm_arm926ej-s
+          - ARTIFACT: linux-armv7hf
+            ARCH: arm_cortex-a7_neon-vfpv4
+          - ARTIFACT: linux-aarch64
+            ARCH: aarch64_cortex-a53
+          - ARTIFACT: linux-x86_64
+            ARCH: x86_64
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Fetch the packed binary
+        uses: actions/download-artifact@v4
+        with:
+          name: easytier-lite-${{ matrix.ARTIFACT }}
+          path: bin
+
+      - name: Build ipk
+        run: |
+          BIN=$(find bin -type f -name 'easytier-lite-*' | head -1)
+          ls -l "$BIN"
+          chmod +x "$BIN"
+          python3 easytier-contrib/easytier-lite/build-ipk.py \
+            --bin "$BIN" \
+            --arch "${{ matrix.ARCH }}" \
+            --version "${{ env.LITE_VERSION }}" \
+            --out ipk
+          ls -l ipk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ipk-${{ matrix.ARCH }}
+          path: ipk/*.ipk
+          if-no-files-found: error
+
+  publish:
+    needs: [build, ipk]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
@@ -219,6 +270,13 @@ jobs:
         with:
           pattern: easytier-lite-*
           path: out
+
+      - name: Download every ipk
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: ipk-*
+          path: ipk-out
 
       - name: Zip per platform
         run: |
@@ -255,5 +313,13 @@ jobs:
             Linux binaries are static musl, UPX packed. Every target is UPX
             (lzma) packed when the format is supported; binaries UPX cannot
             handle ship as plain release builds.
-          files: assets/*.zip
+
+            `luci-app-easytier-lite_<version>-1_<arch>.ipk` bundles the same
+            binary with a procd service and a LuCI page (VPN -> EasyTier Lite)
+            for OpenWrt / ImmortalWrt:
+
+                opkg install luci-app-easytier-lite_*.ipk
+          files: |
+            assets/*.zip
+            ipk-out/**/*.ipk
           fail_on_unmatched_files: true
