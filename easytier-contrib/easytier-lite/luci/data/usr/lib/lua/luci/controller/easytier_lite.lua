@@ -1,10 +1,12 @@
 module("luci.controller.easytier_lite", package.seeall)
 
+local l10n = require "luci.easytier_lite.i18n"
+
 function index()
 	if not io.open("/etc/config/easytier-lite") then
 		return
 	end
-	entry({"admin", "vpn", "easytier_lite"}, cbi("easytier_lite"), _("EasyTier Lite"), 60).dependent = false
+	entry({"admin", "vpn", "easytier_lite"}, cbi("easytier_lite"), l10n.t("EasyTier Lite"), 60).dependent = false
 	entry({"admin", "vpn", "easytier_lite", "start"}, call("action_start")).leaf = true
 	entry({"admin", "vpn", "easytier_lite", "stop"}, call("action_stop")).leaf = true
 	entry({"admin", "vpn", "easytier_lite", "restart"}, call("action_restart")).leaf = true
