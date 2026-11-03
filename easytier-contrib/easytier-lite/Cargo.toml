@@ -23,6 +23,7 @@ easytier = { workspace = true, features = [
     "proxy-cidr-monitor",
     "smoltcp",
     "tcp-hole-punch",
+    "tun",
 ] }
 easytier-core.workspace = true
 tokio = { workspace = true, features = [
