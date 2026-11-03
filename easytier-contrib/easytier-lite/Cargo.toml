@@ -16,6 +16,7 @@ cidr.workspace = true
 url.workspace = true
 easytier = { workspace = true, features = [
     "aes-gcm",
+    "dhcp-ipv4",
     "dns-resolver",
     "kcp",
     "logging",
