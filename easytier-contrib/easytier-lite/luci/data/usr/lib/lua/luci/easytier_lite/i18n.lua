@@ -40,6 +40,11 @@ local ZH = {
 	["TCP and UDP listen on this port (-l tcp/udp://0.0.0.0:PORT). Allow it from WAN in the firewall for direct connections."] =
 		"TCP 与 UDP 监听该端口（-l tcp/udp://0.0.0.0:PORT）。要允许对端直连，需在防火墙放行 WAN 侧。",
 	["Do Not Listen"] = "不监听",
+	["Create Virtual NIC"] = "创建虚拟网卡",
+	["Create the virtual NIC for this node (--tun), so its virtual IP is pingable and reachable. "
+		.. "Needs /dev/net/tun on the device; leave off for relay / subnet-proxy-only duty."] =
+		"为本节点创建虚拟网卡（--tun），创建后其虚拟 IP 才能被 ping 通和访问。"
+		.. "需要系统支持 /dev/net/tun；只做中继或子网代理时无需勾选。",
 	["Only connect out, never accept connections (--no-listener). Use for pure clients; "
 		.. "do not enable on the home router that other nodes connect to."] =
 		"只主动外连，不接受入站连接（--no-listener）。适用于纯客户端；"

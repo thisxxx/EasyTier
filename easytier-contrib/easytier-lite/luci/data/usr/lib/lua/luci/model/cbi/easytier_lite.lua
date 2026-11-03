@@ -74,12 +74,20 @@ o = s:option(Flag, "dhcp", T("DHCP Virtual IP"),
 	T("Let the network assign a virtual address automatically (-d)."))
 o.default = "0"
 o.rmempty = false
+o:depends("tun", "1")
+
+o = s:option(Flag, "tun", T("Create Virtual NIC"),
+	T("Create the virtual NIC for this node (--tun), so its virtual IP is pingable and reachable. "
+		.. "Needs /dev/net/tun on the device; leave off for relay / subnet-proxy-only duty."))
+o.default = "0"
+o.rmempty = false
 
 o = s:option(Value, "ipv4", T("Virtual IPv4"),
 	T("Static virtual address of this node (--ipv4), e.g. 10.126.126.2/24. Ignored when DHCP is on."))
 o.datatype = "ip4addr"
 o.placeholder = "10.126.126.2/24"
 o:depends("dhcp", "0")
+o:depends("tun", "1")
 
 o = s:option(DynamicList, "peers", T("Peer URLs"),
 	T("Initial peers to connect to (-p), e.g. tcp://1.2.3.4:11010. The public server should be listed here."))

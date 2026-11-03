@@ -6,8 +6,9 @@
 //! The network runs with a fixed policy that suits a small router acting as a
 //! relay or a subnet gateway:
 //!
-//! * `no_tun` + `use_smoltcp` — subnet proxy runs on the userspace stack, so no
-//!   TUN device and no kernel forwarding rules are needed.
+//! * `no_tun` + `use_smoltcp` — no virtual NIC by default; the subnet proxy
+//!   runs on the userspace stack, so no kernel forwarding rules are needed.
+//!   Pass `--tun` to create the virtual NIC (needs /dev/net/tun).
 //! * `private_mode` — only networks admitted by `--private-group` (or sharing
 //!   this node's secret) may join.
 //! * `enable_exit_node`, `enable_kcp_proxy`, `latency_first`,
@@ -49,6 +50,8 @@ Options:
                                system hostname (32 chars max)
   --ipv4 <CIDR>                static virtual address, e.g. 10.126.126.1/24
   -d, --dhcp                   let the network assign a virtual address instead
+      --tun                    create the virtual NIC (needs /dev/net/tun);
+                               without it this node is relay / subnet proxy only
   -p, --peers <URL,...>        peers to connect to, e.g. tcp://1.2.3.4:11010
   -l, --listeners <URL,...>    listeners, e.g. tcp://0.0.0.0:11010
                                defaults to tcp+udp on 0.0.0.0:11010
@@ -83,6 +86,7 @@ struct Options {
     peers: Vec<String>,
     listeners: Vec<String>,
     no_listener: bool,
+    tun: bool,
     proxy_networks: Vec<String>,
     private_groups: Vec<String>,
     console_log_level: Option<String>,
@@ -148,6 +152,7 @@ fn parse_args(mut args: impl Iterator<Item = OsString>) -> anyhow::Result<Comman
                 push_list(&mut options.listeners, take_value(&flag, inline, &mut args)?)
             }
             "--no-listener" => options.no_listener = true,
+            "--tun" => options.tun = true,
             "-n" | "--proxy-networks" => push_list(
                 &mut options.proxy_networks,
                 take_value(&flag, inline, &mut args)?,
@@ -172,12 +177,12 @@ fn parse_args(mut args: impl Iterator<Item = OsString>) -> anyhow::Result<Comman
 /// The policy this build runs with. Callers can still override any of these
 /// through the environment the node runs in; the values here are the defaults
 /// a bare command line gets.
-fn default_flags() -> FlagsPatch {
+fn default_flags(tun: bool) -> FlagsPatch {
     FlagsPatch {
         enable_exit_node: Some(true),
         enable_kcp_proxy: Some(true),
         latency_first: Some(true),
-        no_tun: Some(true),
+        no_tun: Some(!tun),
         private_mode: Some(true),
         proxy_forward_by_system: Some(true),
         relay_all_peer_rpc: Some(true),
@@ -288,7 +293,7 @@ fn build_config(options: &Options) -> anyhow::Result<TomlConfigLoader> {
             .map(|raw| parse_private_group(raw))
             .collect(),
     );
-    config.patch_flags(default_flags());
+    config.patch_flags(default_flags(options.tun));
 
     Ok(config)
 }
@@ -443,7 +448,7 @@ mod tests {
 
     #[test]
     fn default_flags_match_the_router_policy() {
-        let flags = default_flags();
+        let flags = default_flags(false);
 
         assert_eq!(flags.no_tun, Some(true));
         assert_eq!(flags.private_mode, Some(true));
@@ -453,5 +458,16 @@ mod tests {
         assert_eq!(flags.latency_first, Some(true));
         assert_eq!(flags.proxy_forward_by_system, Some(true));
         assert_eq!(flags.relay_all_peer_rpc, Some(true));
+    }
+
+    #[test]
+    fn tun_flag_opens_the_virtual_nic() {
+        assert_eq!(default_flags(true).no_tun, Some(false));
+
+        let config = build_config(&parse(["--network-name", "home", "--tun"]).unwrap()).unwrap();
+        assert_eq!(config.get_flags().no_tun, Some(false));
+
+        let config = build_config(&parse(["--network-name", "home"]).unwrap()).unwrap();
+        assert_eq!(config.get_flags().no_tun, Some(true));
     }
 }
