@@ -18,6 +18,7 @@ easytier = { workspace = true, features = [
     "aes-gcm",
     "dhcp-ipv4",
     "dns-resolver",
+    "icmp-proxy",
     "kcp",
     "logging",
     "management-rpc",
